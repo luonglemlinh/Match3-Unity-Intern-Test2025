@@ -26,6 +26,11 @@
   + The player loses if they fail to clear the board within 1 minute.
 
 # MY WORK: 
+
+## Note:
+If cloning via command line, or having compile errors with DOTween, please run Git LFS to pull the required plugin binaries:
+`git lfs pull`
+
 ## TASK 1: RESKIN
 Assets\Resources\prefabs\itemNormal.prefab > Sprite Renderer > Sprite > fish
 ## TASK 2: CHANGE THE GAMEPLAY
@@ -65,3 +70,8 @@ Assets\Resources\prefabs\itemNormal.prefab > Sprite Renderer > Sprite > fish
   + Added Animation: item.View,DOMove;  ExplodeView() (DOScale(0f, 0.25f) in **Item.cs**
   + Added GetNearTraySlot() and ReturnItemtoBoard() for moving item back to the tray in timer mode 
   
+
+## Setup Instructions
+If cloning via command line,or  please run Git LFS to pull the required plugin binaries:
+`git lfs pull`
+
