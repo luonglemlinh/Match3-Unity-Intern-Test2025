@@ -113,6 +113,8 @@ InitTestScene*.unity*
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
 
+*.dll
+!Assets/Demigiant/**/*.dll
 !Assets/Plugins/**/*.dll
 !Assets/Plugins/**/*.dll.meta
 !Assets/Demigiant/**/*.dll
