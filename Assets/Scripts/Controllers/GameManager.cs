@@ -11,7 +11,9 @@ public class GameManager : MonoBehaviour
     public enum eLevelMode
     {
         TIMER,
-        MOVES
+        MOVES,
+        AUTO_PLAY,
+        AUTO_LOSE,
     }
 
     public enum eStateGame
@@ -20,6 +22,7 @@ public class GameManager : MonoBehaviour
         MAIN_MENU,
         GAME_STARTED,
         PAUSE,
+        WIN,
         GAME_OVER,
     }
 
@@ -44,6 +47,14 @@ public class GameManager : MonoBehaviour
     private UIMainManager m_uiMenu;
 
     private LevelCondition m_levelCondition;
+
+    private eLevelMode m_currentLevelMode;
+
+    public eLevelMode CurrentLevelMode => m_currentLevelMode;   
+
+    private TraySlotsHolder m_trayHolder;
+
+
 
     private void Awake()
     {
@@ -83,21 +94,23 @@ public class GameManager : MonoBehaviour
 
     public void LoadLevel(eLevelMode mode)
     {
-        m_boardController = new GameObject("BoardController").AddComponent<BoardController>();
-        m_boardController.StartGame(this, m_gameSettings);
+        ClearLevel();
+        m_currentLevelMode = mode;
 
-        if (mode == eLevelMode.MOVES)
-        {
-            m_levelCondition = this.gameObject.AddComponent<LevelMoves>();
-            m_levelCondition.Setup(m_gameSettings.LevelMoves, m_uiMenu.GetLevelConditionView(), m_boardController);
-        }
-        else if (mode == eLevelMode.TIMER)
+        GameObject trayGO = new GameObject("TraySlotsHolder");
+        m_trayHolder = trayGO.AddComponent<TraySlotsHolder>();
+
+        m_trayHolder.Initialize(m_gameSettings.TraySlotCount, m_gameSettings.BoardSizeY);
+
+        m_boardController = new GameObject("BoardController").AddComponent<BoardController>();
+        m_boardController.StartGame(this, m_gameSettings, m_trayHolder);
+
+        if (mode == eLevelMode.TIMER)
         {
             m_levelCondition = this.gameObject.AddComponent<LevelTime>();
-            m_levelCondition.Setup(m_gameSettings.LevelMoves, m_uiMenu.GetLevelConditionView(), this);
+            m_levelCondition.Setup(m_gameSettings.LevelTime, m_uiMenu.GetLevelConditionView(), this);
+            m_levelCondition.ConditionCompleteEvent += GameOver;
         }
-
-        m_levelCondition.ConditionCompleteEvent += GameOver;
 
         State = eStateGame.GAME_STARTED;
     }
@@ -107,6 +120,16 @@ public class GameManager : MonoBehaviour
         StartCoroutine(WaitBoardController());
     }
 
+    public void Win()
+    {
+        SetState(eStateGame.WIN);
+    }
+
+    public void Lose()
+    {
+        SetState(eStateGame.GAME_OVER);
+    }
+
     internal void ClearLevel()
     {
         if (m_boardController)
@@ -114,6 +137,18 @@ public class GameManager : MonoBehaviour
             m_boardController.Clear();
             Destroy(m_boardController.gameObject);
             m_boardController = null;
+        }
+        if (m_trayHolder)
+        {
+            Destroy(m_trayHolder.gameObject);
+            m_trayHolder = null;
+        }
+
+        if (m_levelCondition != null)
+        {
+            m_levelCondition.ConditionCompleteEvent -= GameOver;
+            Destroy(m_levelCondition);
+            m_levelCondition = null;
         }
     }
 
@@ -135,5 +170,10 @@ public class GameManager : MonoBehaviour
             Destroy(m_levelCondition);
             m_levelCondition = null;
         }
+    }
+
+    public UnityEngine.UI.Text GetLevelConditionView()
+    {
+        return m_uiMenu.GetLevelConditionView();
     }
 }

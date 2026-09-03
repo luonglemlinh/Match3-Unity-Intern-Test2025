@@ -674,4 +674,109 @@ public class Board
             }
         }
     }
+
+    internal void FillWithTripleCounts()
+    {
+        int totalCells = boardSizeX * boardSizeY;
+        NormalItem.eNormalType[] itemTypes = (NormalItem.eNormalType[])System.Enum.GetValues(typeof(NormalItem.eNormalType));
+        int typeCount = itemTypes.Length;
+        List<NormalItem.eNormalType> itemBag = new List<NormalItem.eNormalType>();
+
+        for (int i = 0; i < typeCount; i++)
+        {
+            itemBag.Add(itemTypes[i]);
+            itemBag.Add(itemTypes[i]);
+            itemBag.Add(itemTypes[i]);
+        }
+
+        int remaining = totalCells - itemBag.Count;
+
+        while (remaining >= 3)
+        {
+            NormalItem.eNormalType randomType = itemTypes[UnityEngine.Random.Range(0, typeCount)];
+            itemBag.Add(randomType);
+            itemBag.Add(randomType);
+            itemBag.Add(randomType);
+            remaining -= 3;
+        }
+
+        for (int t = itemBag.Count - 1; t > 0; t--)
+        {
+            int randomIndex = UnityEngine.Random.Range(0, t + 1);
+
+            // Swap
+            NormalItem.eNormalType temp = itemBag[t];
+            itemBag[t] = itemBag[randomIndex];
+            itemBag[randomIndex] = temp;
+        }   
+
+        int bagIndex = 0;
+        for (int x = 0; x < boardSizeX; x++)
+        {
+            for (int y = 0; y < boardSizeY; y++)
+            {
+                Cell cell = m_cells[x, y];
+                NormalItem item = new NormalItem();
+                item.SetType(itemBag[bagIndex]);
+                item.SetView();
+                item.SetViewRoot(m_root);
+                cell.Assign(item);
+                cell.ApplyItemPosition(false);
+                bagIndex++;
+            }
+        }
+
+    }
+
+    internal bool IsEmpty()
+    {
+        for (int x = 0; x < boardSizeX; x++)
+        {
+            for (int y = 0; y < boardSizeY; y++)
+            {
+                if (!m_cells[x, y].IsEmpty)
+                {
+                    return false;
+                }
+                
+            }
+
+        }
+        return true;
+    }
+
+    internal Cell FindCellOfType(NormalItem.eNormalType type)
+    {
+        for (int x = 0; x < boardSizeX; x++)
+        {
+            for (int y =0; y < boardSizeY; y++)
+            {
+                Cell cell = m_cells[x, y];
+                NormalItem normalItem = cell.Item as NormalItem;
+
+                if (normalItem != null && normalItem.ItemType == type)
+                {
+                    return cell;
+                }
+            }
+        }
+        return null;
+    }
+
+    internal List<NormalItem.eNormalType> GetDistinctTypesOnBoard()
+    {
+        List<NormalItem.eNormalType> types = new List<NormalItem.eNormalType>();
+        for (int x = 0; x < boardSizeX; x++)
+        {
+            for (int y = 0; y < boardSizeY; y++)
+            {
+                NormalItem normalItem = m_cells[x, y].Item as NormalItem;
+                if (normalItem != null && !types.Contains(normalItem.ItemType))
+                {
+                    types.Add(normalItem.ItemType);
+                }
+            }
+        }
+        return types;
+    }
 }

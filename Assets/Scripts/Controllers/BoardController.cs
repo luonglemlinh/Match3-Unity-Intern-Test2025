@@ -1,4 +1,4 @@
-﻿using DG.Tweening;
+using DG.Tweening;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -15,41 +15,88 @@ public class BoardController : MonoBehaviour
 
     private GameManager m_gameManager;
 
-    private bool m_isDragging;
-
     private Camera m_cam;
-
-    private Collider2D m_hitCollider;
 
     private GameSettings m_gameSettings;
 
     private List<Cell> m_potentialMatch;
 
-    private float m_timeAfterFill;
-
-    private bool m_hintIsShown;
-
     private bool m_gameOver;
 
-    public void StartGame(GameManager gameManager, GameSettings gameSettings)
+    private NormalItem[] m_trayItems;
+
+    private Cell[] m_trayslotOriginCells;
+
+    private Transform[] m_traySlots;
+
+    private GameManager.eLevelMode m_playMode;
+
+    private Transform m_boardRoot;
+
+    private TraySlotsHolder m_trayHolder;
+
+    public void StartGame(GameManager gameManager, GameSettings gameSettings, TraySlotsHolder trayHolder)
     {
         m_gameManager = gameManager;
 
         m_gameSettings = gameSettings;
 
+        m_trayHolder = trayHolder;
+
+        m_playMode = gameManager.CurrentLevelMode;
+
         m_gameManager.StateChangedAction += OnGameStateChange;
 
         m_cam = Camera.main;
 
+        m_boardRoot = this.transform;
+
         m_board = new Board(this.transform, gameSettings);
 
+        int slotCount = 5;
+
+        if (trayHolder != null)
+        {
+            slotCount = trayHolder.GetSlotCount();
+        }
+        else if (gameSettings != null)
+        {
+            slotCount = gameSettings.TraySlotCount;
+        }
+        m_trayItems = new NormalItem[slotCount];
+        m_trayslotOriginCells = new Cell[slotCount];
+        m_traySlots = new Transform[slotCount];
+
+        if (trayHolder != null)
+        {
+            for (int i = 0; i < slotCount; i++)
+            {
+                m_traySlots[i] = trayHolder.GetSlotTransform(i);
+            }
+        }
+
         Fill();
+
+        if (m_playMode == GameManager.eLevelMode.AUTO_PLAY)
+        {
+            StartCoroutine(AutoPlayRoutine());
+        }
+
+        else if (m_playMode == GameManager.eLevelMode.AUTO_LOSE)
+        {
+            StartCoroutine(AutoLoseRoutine());
+        }
+
+        UnityEngine.UI.Text levelConditionView = m_gameManager.GetLevelConditionView();
+        if (levelConditionView != null)
+        {
+            levelConditionView.transform.parent.gameObject.SetActive(m_playMode == GameManager.eLevelMode.TIMER);   
+        }
     }
 
     private void Fill()
     {
-        m_board.Fill();
-        FindMatchesAndCollapse();
+        m_board.FillWithTripleCounts();
     }
 
     private void OnGameStateChange(GameManager.eStateGame state)
@@ -62,9 +109,11 @@ public class BoardController : MonoBehaviour
             case GameManager.eStateGame.PAUSE:
                 IsBusy = true;
                 break;
+            case GameManager.eStateGame.WIN:
+                m_gameOver = true;
+                break;
             case GameManager.eStateGame.GAME_OVER:
                 m_gameOver = true;
-                StopHints();
                 break;
         }
     }
@@ -75,66 +124,153 @@ public class BoardController : MonoBehaviour
         if (m_gameOver) return;
         if (IsBusy) return;
 
-        if (!m_hintIsShown)
-        {
-            m_timeAfterFill += Time.deltaTime;
-            if (m_timeAfterFill > m_gameSettings.TimeForHint)
-            {
-                m_timeAfterFill = 0f;
-                ShowHint();
-            }
-        }
-
         if (Input.GetMouseButtonDown(0))
         {
-            var hit = Physics2D.Raycast(m_cam.ScreenToWorldPoint(Input.mousePosition), Vector2.zero);
-            if (hit.collider != null)
+            Vector3 worldPos = m_cam.ScreenToWorldPoint(Input.mousePosition);
+            if (m_playMode == GameManager.eLevelMode.TIMER)
             {
-                m_isDragging = true;
-                m_hitCollider = hit.collider;
-            }
-        }
-
-        if (Input.GetMouseButtonUp(0))
-        {
-            ResetRayCast();
-        }
-
-        if (Input.GetMouseButton(0) && m_isDragging)
-        {
-            var hit = Physics2D.Raycast(m_cam.ScreenToWorldPoint(Input.mousePosition), Vector2.zero);
-            if (hit.collider != null)
-            {
-                if (m_hitCollider != null && m_hitCollider != hit.collider)
+                int traySlot = GetNearTraySlot(worldPos);
+                if (traySlot >= 0)
                 {
-                    StopHints();
-
-                    Cell c1 = m_hitCollider.GetComponent<Cell>();
-                    Cell c2 = hit.collider.GetComponent<Cell>();
-                    if (AreItemsNeighbor(c1, c2))
-                    {
-                        IsBusy = true;
-                        SetSortingLayer(c1, c2);
-                        m_board.Swap(c1, c2, () =>
-                        {
-                            FindMatchesAndCollapse(c1, c2);
-                        });
-
-                        ResetRayCast();
-                    }
+                    ReturnItemToBoard(traySlot);
+                    return;
                 }
             }
-            else
+
+            RaycastHit2D hit = Physics2D.Raycast(worldPos, Vector2.zero);
+            
+            if (hit.collider != null)
             {
-                ResetRayCast();
+                Cell cell = hit.collider.GetComponent<Cell>();
+                if (cell != null && !cell.IsEmpty)
+                {
+                    OnCellTapped(cell);
+                }
             }
         }
     }
 
-    private void ResetRayCast()
+    private void OnCellTapped(Cell cell)
     {
-        m_isDragging = false;
-        m_hitCollider = null;
+        if (IsBusy) return;
+        if (cell == null || cell.Item == null) return;
+        int slotIndex = GetFreeTraySlot();
+        if (slotIndex < 0) return;
+        NormalItem item = cell.Item as NormalItem;
+        if (item == null || item.View == null) return;
+
+        if (m_traySlots[slotIndex] == null) return;
+
+        IsBusy = true;
+
+        cell.Free();
+
+        m_trayslotOriginCells[slotIndex] = cell;
+        Transform slot = m_traySlots[slotIndex];
+
+        item.View.DOMove(slot.position, 0.25f).OnComplete(() =>
+        {
+            item.View.SetParent(slot);
+            PlaceInTray(slotIndex, item);
+        });
+    }
+
+    private int GetFreeTraySlot()
+    {
+        for ( int i = 0; i < m_trayItems.Length; i++)
+        {
+            if (m_trayItems[i] == null) return i;
+        }
+        return -1;
+    }
+
+    private void PlaceInTray(int slotIndex, NormalItem item)
+    {
+        if (item == null)
+        {
+            IsBusy = false;
+            return;
+        }
+
+        m_trayItems[slotIndex] = item;
+        List<int> matchIndices = new List<int>();
+        for (int i = 0; i < m_trayItems.Length; i++)
+        {
+            if (m_trayItems[i] != null && m_trayItems[i].ItemType == item.ItemType)
+            {
+                matchIndices.Add(i);
+            }
+        }
+
+        if (matchIndices.Count >= 3)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                int idx = matchIndices[i];
+                if (m_trayItems[idx] != null)
+                {
+                    m_trayItems[idx].ExplodeView();
+                }
+                m_trayItems[idx] = null;
+
+                m_trayslotOriginCells[idx] = null;
+            }
+
+            if (m_board.IsEmpty())
+            {
+                IsBusy = false;
+                m_gameManager.Win();
+                return;
+            }
+            else if (GetFreeTraySlot() < 0)
+            {
+                IsBusy = false;
+                m_gameManager.Lose();
+                return;
+            }
+        }
+
+        // Check if tray is now full after placing item
+        if (GetFreeTraySlot() < 0 && !m_board.IsEmpty())
+        {
+            IsBusy = false;
+            m_gameManager.Lose();
+            return;
+        }
+
+        IsBusy = false;
+    }
+
+    private int GetNearTraySlot(Vector3 worldPos)
+    {
+        float radius = 0.5f;
+        for (int i = 0; i < m_traySlots.Length; i++)
+        {
+            if (m_trayItems[i] != null && m_traySlots[i] != null)
+            {
+                float dist = Vector2.Distance(worldPos, m_traySlots[i].position);
+                if (dist < radius) return i;
+            }
+        }
+        return -1;
+    }
+
+    private void ReturnItemToBoard(int slotIndex)
+    {
+        NormalItem item = m_trayItems[slotIndex];
+        Cell originCell = m_trayslotOriginCells[slotIndex];
+        if (item == null || originCell == null || item.View == null) return;
+        IsBusy = true;
+        m_trayItems[slotIndex] = null;
+        m_trayslotOriginCells[slotIndex] = null;
+
+        item.View.SetParent(m_boardRoot);
+        item.View.DOMove(originCell.transform.position, 0.25f).OnComplete(() =>
+        {
+            originCell.Assign(item);
+            originCell.ApplyItemPosition(false);
+            IsBusy = false;
+        });
     }
 
     private void FindMatchesAndCollapse(Cell cell1, Cell cell2)
@@ -175,30 +311,7 @@ public class BoardController : MonoBehaviour
         }
     }
 
-    private void FindMatchesAndCollapse()
-    {
-        List<Cell> matches = m_board.FindFirstMatch();
 
-        if (matches.Count > 0)
-        {
-            CollapseMatches(matches, null);
-        }
-        else
-        {
-            m_potentialMatch = m_board.GetPotentialMatches();
-            if (m_potentialMatch.Count > 0)
-            {
-                IsBusy = false;
-
-                m_timeAfterFill = 0f;
-            }
-            else
-            {
-                //StartCoroutine(RefillBoardCoroutine());
-                StartCoroutine(ShuffleBoardCoroutine());
-            }
-        }
-    }
 
     private List<Cell> GetMatches(Cell cell)
     {
@@ -241,8 +354,6 @@ public class BoardController : MonoBehaviour
         m_board.FillGapsWithNewItems();
 
         yield return new WaitForSeconds(0.2f);
-
-        FindMatchesAndCollapse();
     }
 
     private IEnumerator RefillBoardCoroutine()
@@ -254,8 +365,6 @@ public class BoardController : MonoBehaviour
         m_board.Fill();
 
         yield return new WaitForSeconds(0.2f);
-
-        FindMatchesAndCollapse();
     }
 
     private IEnumerator ShuffleBoardCoroutine()
@@ -263,8 +372,6 @@ public class BoardController : MonoBehaviour
         m_board.Shuffle();
 
         yield return new WaitForSeconds(0.3f);
-
-        FindMatchesAndCollapse();
     }
 
 
@@ -279,28 +386,96 @@ public class BoardController : MonoBehaviour
         return cell1.IsNeighbour(cell2);
     }
 
-    internal void Clear()
+    private IEnumerator AutoPlayRoutine()
+    {
+        yield return new WaitForSeconds(0.5f);
+        while (!m_gameOver)
+        {
+            NormalItem.eNormalType target = default(NormalItem.eNormalType);
+            bool hasTarget = false;
+            for (int i = 0; i < m_trayItems.Length; i++)
+            {
+                if (m_trayItems[i] != null)
+                {
+                    target = m_trayItems[i].ItemType;
+                    hasTarget = true;
+                    break;
+                }
+            }
+            if (!hasTarget)
+            {
+                NormalItem.eNormalType[] allTypes = (NormalItem.eNormalType[])System.Enum.GetValues(typeof(NormalItem.eNormalType));
+                for (int t = 0; t < allTypes.Length; t++)
+                {
+                    if (m_board.FindCellOfType(allTypes[t]) != null)
+                    {
+                        target = allTypes[t];
+                        hasTarget = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!hasTarget) yield break;
+
+            Cell cell = m_board.FindCellOfType(target);
+            if (cell != null) OnCellTapped(cell);
+            yield return new WaitForSeconds(0.5f);
+            while (IsBusy) yield return null;
+        }
+        
+    }
+
+    private IEnumerator AutoLoseRoutine()
+    {
+        yield return new WaitForSeconds(0.5f);
+        while (!m_gameOver)
+        {
+            List<NormalItem.eNormalType> typesInTray = new List<NormalItem.eNormalType>();
+            for (int i = 0; i < m_trayItems.Length; i++)
+            {
+                if (m_trayItems[i] != null && !typesInTray.Contains(m_trayItems[i].ItemType))
+                {
+                    typesInTray.Add(m_trayItems[i].ItemType);
+                }
+            }
+
+            List<NormalItem.eNormalType> boardTypes = m_board.GetDistinctTypesOnBoard();
+            NormalItem.eNormalType target = default(NormalItem.eNormalType);
+
+            bool hasTarget = false;
+
+            for(int i = 0; i < boardTypes.Count; i++)
+            {
+                if (!typesInTray.Contains(boardTypes[i]))
+                {
+                    target = boardTypes[i];
+                    hasTarget = true;
+                    break;
+                }
+            }
+            if (!hasTarget && boardTypes.Count > 0)
+            {
+                target = boardTypes[0];
+                hasTarget = true;
+            }
+
+            if (!hasTarget) yield break;
+            Cell cell = m_board.FindCellOfType(target);
+            if (cell != null)
+            {
+                OnCellTapped(cell);
+            }
+            yield return new WaitForSeconds(0.5f);
+
+            while (IsBusy) yield return null;
+        }
+    }
+
+
+                internal void Clear()
     {
         m_board.Clear();
     }
 
-    private void ShowHint()
-    {
-        m_hintIsShown = true;
-        foreach (var cell in m_potentialMatch)
-        {
-            cell.AnimateItemForHint();
-        }
-    }
-
-    private void StopHints()
-    {
-        m_hintIsShown = false;
-        foreach (var cell in m_potentialMatch)
-        {
-            cell.StopHintAnimation();
-        }
-
-        m_potentialMatch.Clear();
-    }
 }
