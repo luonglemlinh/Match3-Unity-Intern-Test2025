@@ -26,4 +26,35 @@
   + The player loses if they fail to clear the board within 1 minute.
 
 # MY WORK: 
+## TASK 1: RESKIN
+Assets\Resources\prefabs\itemNormal.prefab > Sprite Renderer > Sprite > fish
+## TASK 2: CHANGE THE GAMEPLAY
+**IDEA:**
+  + Create a tray that holds slots, the number of slots can be configured in settings
+  + Change core gameplay loop from Bejeweled to match-3, maybe can keep the old matching mechanic, change Input.GetMouseButton, make a function to move the item to tray
+  + Win conditions: cells cleared; create UIPanelWin.cs and win eStateGame
+  + add 3 more buttons for AutoPLay, AutoLose, TimeAttack & wire to their corresponding scripts
+ 
+### **CHANGES MADE:**
+
+#### _**Codes:**_
+
+- **GameSettings.cs:** Added public int TraySlotCount
+- Created **TraySlotsHolder.cs** using TraySlotCount
+- **Board.cs:** Added FillWithTripleCounts(), IsEmpty(), FindCellOfType()
+- **BoardController.cs:**
+  + Added tray slot variables, Updated StartGame()
+  + Modified Update(), Added OnCellTapped(), GetFreeTraySlot(), PlaceInTray
+  + Removed m_isDragging, m_timeAfterFill, m_hintIsShown, m_hitCollider, FindMatchesAndCollapse(), ResetRayCast(), ShowHints(), StopHints()
+  + OnGameStateChange(): added Win case
+  + Added AutoPlayRoutine(), AutoLoseRoutine()  
+- **GameManager.cs:** Added ClearLevel(), changed LoadLevel()
+- **UIMainManager.cs:** Added Win(), Lose()
+- **UIPanelMain:** Added AutoPlay, AutoLose Button with their corresponding functions
+- Created **LevelAutoPlay.cs** and **LevelAutoLose.cs** for button wiring
+  
+#### _**Scene:**_
+
+-  _PanelWin:_ Wired **UIPanelWin.cs** 
+- 
 
