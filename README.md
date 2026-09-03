@@ -29,6 +29,7 @@
 
 ## Note:
 If cloning via command line, or having compile errors with DOTween, please run Git LFS to pull the required plugin binaries:
+
 `git lfs pull`
 
 ## TASK 1: RESKIN
