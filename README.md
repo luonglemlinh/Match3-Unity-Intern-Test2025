@@ -55,6 +55,13 @@ Assets\Resources\prefabs\itemNormal.prefab > Sprite Renderer > Sprite > fish
   
 #### _**Scene:**_
 
--  _PanelWin:_ Wired **UIPanelWin.cs** 
-- 
+-  _PanelWin:_ Wired with **UIPanelWin.cs** 
+- _PanelHome:_ Wired sripts with their respective gameplay; and wired btn with their respective OnClick() scripts
 
+## TASK 3: IMPROVE THE GAMEPLAY
+
+- **Board.cs**: FillWithTripleCounts() added: every ENormalType is added 3 times initially
+- **BoardController.cs:**
+  + Added Animation: item.View,DOMove;  ExplodeView() (DOScale(0f, 0.25f) in **Item.cs**
+  + Added GetNearTraySlot() and ReturnItemtoBoard() for moving item back to the tray in timer mode 
+  
