@@ -72,7 +72,4 @@ Assets\Resources\prefabs\itemNormal.prefab > Sprite Renderer > Sprite > fish
   + Added GetNearTraySlot() and ReturnItemtoBoard() for moving item back to the tray in timer mode 
   
 
-## Setup Instructions
-If cloning via command line,or  please run Git LFS to pull the required plugin binaries:
-`git lfs pull`
 
